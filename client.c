@@ -3,6 +3,9 @@
 #define CDT_IMPL
 #include "cdt.h"
 
+#define ENET_IMPLEMENTATION
+#include "enet.h"
+
 // START: Macros & Constants
 #define WINDOW_WIDTH  800
 #define WINDOW_HEIGHT 600

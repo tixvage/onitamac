@@ -1,4 +1,7 @@
-all: game
+all: client server
 
-game: main.c
-	gcc -std=c11 -Wall -Wextra -ggdb -o game main.c -lm -lraylib
+server: server.c
+	gcc -Wall -Wextra -ggdb -o server server.c
+
+client: client.c
+	gcc -Wall -Wextra -ggdb -o client client.c -lm -lraylib
