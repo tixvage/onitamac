@@ -389,7 +389,7 @@ void draw_piece(usize x, usize y, Color c) {
         pawn_texture.height,
     };
     usize index = y * BOARD_SIZE + x;
-    const f32 scale_factor = G.highlighted_index == cast(i32) index ? 3.5f : 3.f;
+    const f32 scale_factor = G.highlighted_index == cast(i32) index ? 4.f : 3.f;
     f32 pos_x = board_rect.x + x * PIECE_WIDTH;
     f32 pos_y = board_rect.y + y * PIECE_HEIGHT;
     Rectangle dest = {
@@ -424,11 +424,14 @@ void handle_selection(usize index) {
         moves &= ~friends;
         if (get_bit_index(moves, G.highlighted_index) > 0) {
             enable_bit_index(&G.PIECES[G.selected_group], index);
+            for (usize i = Piece_EM; i <= Piece_ES; i++) {
+                if (get_bit_index(G.PIECES[i], index) > 0) {
+                    disable_bit_index(&G.PIECES[i], index);
+                }
+            }
             disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
-            unselect_piece();
-        } else {
-            unselect_piece();
         }
+        unselect_piece();
     } else {
         for (usize i = Piece_MM; i <= Piece_MS; i++) {
             if (get_bit_index(G.PIECES[i], index) == 0) continue;
