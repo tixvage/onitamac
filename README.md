@@ -1,6 +1,5 @@
 # onimac
-# Introduction
-## Example
+## Build
 ```console
 $ make -B
 $ ./bin/game
