@@ -36,6 +36,7 @@ typedef enum Palette_Colors {
     Palette_BOARD_HIGHLIGHT1,
     Palette_BOARD_HIGHLIGHT2,
     Palette_BOARD_HIGHLIGHT3,
+    Palette_BOARD_HIGHLIGHT4,
     Palette_BOARD_BORDER,
     Palette_MM,
     Palette_MS,
@@ -51,10 +52,11 @@ const Color PALETTE[Palette_Count] = {
     [Palette_BOARD_HIGHLIGHT1] = hex(0x333f4cff),
     [Palette_BOARD_HIGHLIGHT2] = hex(0x404556ff),
     [Palette_BOARD_HIGHLIGHT3] = hex(0x60515cff),
+    [Palette_BOARD_HIGHLIGHT4] = hex(0x504556ff),
     [Palette_BOARD_BORDER]     = hex(0x0f151dff),
     [Palette_MM]               = hex(0x597d7cff),
     [Palette_MS]               = hex(0x386775ff),
-    [Palette_EM]               = hex(0x20504eff),
+    [Palette_EM]               = hex(0x205a4eff),
     [Palette_ES]               = hex(0x193d31ff),
 };
 
@@ -550,11 +552,19 @@ int main(void) {
                 if (G.selected_index != -1) {
                     u32 moves = MOVES[G.selected_move][G.selected_index];
                     u32 friends = G.PIECES[Piece_MS] | G.PIECES[Piece_MM];
+                    u32 enemies = G.PIECES[Piece_ES] | G.PIECES[Piece_EM];
 
                     u32 valid_moves = moves & ~friends;
                     if (get_bit(moves, x, y) > 0) {
                         Rectangle rect = get_piece_rect_highlight(x, y);
-                        DrawRectangleRec(rect, PALETTE[get_bit(valid_moves, x, y) > 0 ? Palette_BOARD_HIGHLIGHT2 : Palette_BOARD_HIGHLIGHT3]);
+                        Color c = PALETTE[Palette_BOARD_HIGHLIGHT3];
+                        if (get_bit(valid_moves, x, y) > 0) {
+                            c = PALETTE[Palette_BOARD_HIGHLIGHT2];
+                        }
+                        if (get_bit(enemies, x, y) > 0) {
+                            c = PALETTE[Palette_BOARD_HIGHLIGHT4];
+                        }
+                        DrawRectangleRec(rect, c);
                     }
                 }
                 if (G.highlighted_index == cast(i32) index) {
