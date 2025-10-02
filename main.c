@@ -48,8 +48,8 @@ typedef enum Palette_Colors {
 const Color PALETTE[Palette_Count] = {
     [Palette_BACKGROUND]       = hex(0x0d0e14ff),
     [Palette_BOARD]            = hex(0x252933ff),
-    [Palette_BOARD_HIGHLIGHT1] = hex(0x404556ff),
-    [Palette_BOARD_HIGHLIGHT2] = hex(0x333f4cff),
+    [Palette_BOARD_HIGHLIGHT1] = hex(0x333f4cff),
+    [Palette_BOARD_HIGHLIGHT2] = hex(0x404556ff),
     [Palette_BOARD_HIGHLIGHT3] = hex(0x60515cff),
     [Palette_BOARD_BORDER]     = hex(0x0f151dff),
     [Palette_MM]               = hex(0x597d7cff),
@@ -109,6 +109,7 @@ static struct G {
     i32 selected_index;
     usize selected_group;
     usize selected_move;
+    bool control_mode_mouse;
 } G = {
     .PIECES = {
         [Piece_MM] = 
@@ -144,10 +145,11 @@ static struct G {
                 00000,
             ),
     },
-    .highlighted_index = -1,
+    .highlighted_index = 12,
     .selected_index = -1,
     .selected_group = Piece_Count,
     .selected_move = Move_ROOSTER,
+    .control_mode_mouse = false,
 };
 
 void select_piece(usize group, i32 index) {
@@ -173,8 +175,16 @@ u8 get_bit(u32 table, u8 x, u8 y) {
     return shifted > 0;
 }
 
+u8 get_bit_index(u32 table, u8 index) {
+    return get_bit(table, index % BOARD_SIZE, index / BOARD_SIZE);
+}
+
 void enable_bit(u32 *table, u8 x, u8 y) {
     *table |= shift_to(x, y);
+}
+
+void enable_bit_index(u32 *table, u8 index) {
+    enable_bit(table, index % BOARD_SIZE, index / BOARD_SIZE);
 }
 
 void disable_bit(u32 *table, u8 x, u8 y) {
@@ -406,6 +416,28 @@ void draw_piece_group(Piece_Type type) {
     }
 }
 
+void handle_selection(usize index) {
+    if (G.selected_index != -1) {
+        u32 moves = MOVES[G.selected_move][G.selected_index];
+        u32 friends = G.PIECES[Piece_MS] | G.PIECES[Piece_MM];
+
+        moves &= ~friends;
+        if (get_bit_index(moves, G.highlighted_index) > 0) {
+            enable_bit_index(&G.PIECES[G.selected_group], index);
+            disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
+            unselect_piece();
+        } else {
+            unselect_piece();
+        }
+    } else {
+        for (usize i = Piece_MM; i <= Piece_MS; i++) {
+            if (get_bit_index(G.PIECES[i], index) == 0) continue;
+            select_piece(i, index);
+            break;
+        }
+    }
+}
+
 int main(void) {
     precalculate_moves();
 
@@ -415,38 +447,40 @@ int main(void) {
     pawn_texture = LoadTexture("pawn.png");
 
     while (!WindowShouldClose()) {
-        Vector2 mouse_pos = GetMousePosition();
-        if (CheckCollisionPointRec(mouse_pos, board_rect)) {
-            f32 dx = mouse_pos.x - board_rect.x;
-            f32 dy = mouse_pos.y - board_rect.y;
-            i32 x = dx / PIECE_WIDTH;
-            i32 y = dy / PIECE_HEIGHT;
-            usize index = y * BOARD_SIZE + x;
-            G.highlighted_index = index;
+        if (IsKeyPressed(KEY_F)) {
+            G.control_mode_mouse = !G.control_mode_mouse;
+        }
+        if (G.control_mode_mouse) {
+            Vector2 mouse_pos = GetMousePosition();
+            if (CheckCollisionPointRec(mouse_pos, board_rect)) {
+                f32 dx = mouse_pos.x - board_rect.x;
+                f32 dy = mouse_pos.y - board_rect.y;
+                i32 x = dx / PIECE_WIDTH;
+                i32 y = dy / PIECE_HEIGHT;
+                usize index = y * BOARD_SIZE + x;
+                G.highlighted_index = index;
 
-            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-                if (G.selected_index != -1) {
-                    u32 moves = MOVES[G.selected_move][G.selected_index];
-                    u32 friends = G.PIECES[Piece_MS] | G.PIECES[Piece_MM];
-
-                    moves &= ~friends;
-                    if (get_bit(moves, x, y) > 0) {
-                        enable_bit(&G.PIECES[G.selected_group], x, y);
-                        disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
-                        unselect_piece();
-                    } else {
-                        unselect_piece();
-                    }
-                } else {
-                    for (usize i = Piece_MM; i <= Piece_MS; i++) {
-                        if (get_bit(G.PIECES[i], x, y) == 0) continue;
-                        select_piece(i, index);
-                        break;
-                    }
+                if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                    handle_selection(index);
                 }
+            } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                unselect_piece();
             }
-        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            unselect_piece();
+        // My mouse is broken right now :(
+        } else {
+            i32 dir_y = IsKeyPressed(KEY_DOWN)  - IsKeyPressed(KEY_UP);
+            i32 dir_x = IsKeyPressed(KEY_RIGHT) - IsKeyPressed(KEY_LEFT);
+            i32 temp = G.highlighted_index;
+            temp += dir_y * BOARD_SIZE + dir_x;
+            G.highlighted_index = clamp(temp, 0, BOARD_SIZE*BOARD_SIZE - 1);
+
+            if (IsKeyPressed(KEY_BACKSPACE)) {
+                unselect_piece();
+            }
+
+            if (IsKeyPressed(KEY_ENTER)) {
+                handle_selection(G.highlighted_index);
+            }
         }
 
         BeginDrawing();
@@ -463,11 +497,8 @@ int main(void) {
                 Rectangle highlight_rect = get_piece_rect_highlight(x, y);
                 // TODO: Put one more pixel line around the whole board
                 DrawRectangleLinesEx(piece_rect, BORDER_THICKNESS / 2.f, PALETTE[Palette_BOARD_BORDER]);
-                if (G.highlighted_index == cast(i32) index) {
-                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT2]);
-                }
                 if (G.selected_index == cast(i32) index) {
-                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT1]);
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT2]);
                 }
 
                 if (G.selected_index != -1) {
@@ -479,6 +510,9 @@ int main(void) {
                         Rectangle rect = get_piece_rect_highlight(x, y);
                         DrawRectangleRec(rect, PALETTE[get_bit(valid_moves, x, y) > 0 ? Palette_BOARD_HIGHLIGHT2 : Palette_BOARD_HIGHLIGHT3]);
                     }
+                }
+                if (G.highlighted_index == cast(i32) index) {
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT1]);
                 }
 
                 for (usize i = 0; i < Piece_Count; i++) {
@@ -493,7 +527,9 @@ int main(void) {
 
         EndDrawing();
 
-        G.highlighted_index = -1;
+        if (G.control_mode_mouse) {
+            G.highlighted_index = -1;
+        }
     }
 
     CloseWindow();
