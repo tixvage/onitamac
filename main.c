@@ -3,6 +3,7 @@
 #define CDT_IMPL
 #include "cdt.h"
 
+// START: Macros & Constants
 #define WINDOW_WIDTH  800
 #define WINDOW_HEIGHT 600
 
@@ -10,6 +11,15 @@
 #define BOARD_HEIGHT  400
 
 #define BORDER_THICKNESS 2.f
+
+#define BOARD_SIZE 5
+#define BOARD_CENTER 12
+
+#define MOVE_TEXTURE_SIZE 100.f
+#define MOVE_TEXTURE_RECT_SIZE (MOVE_TEXTURE_SIZE / BOARD_SIZE)
+
+#define PIECE_WIDTH (BOARD_WIDTH  / BOARD_SIZE)
+#define PIECE_HEIGHT (BOARD_HEIGHT / BOARD_SIZE)
 
 // 25 bit + (first) 7 bits must be skipped
 //                        i like to put `,` at the end
@@ -30,6 +40,16 @@
     .a = (_x >>  0) & 0xFF, \
 }
 
+const Rectangle board_rect = {
+    (WINDOW_WIDTH  - BOARD_WIDTH)  / 2,
+    (WINDOW_HEIGHT - BOARD_HEIGHT) / 2 - 50,
+    BOARD_WIDTH, BOARD_HEIGHT,
+};
+
+Texture2D pawn_texture;
+// END: Macros & Constants
+
+// START: Colors
 typedef enum Palette_Colors {
     Palette_BACKGROUND,
     Palette_BOARD,
@@ -59,111 +79,9 @@ const Color PALETTE[Palette_Count] = {
     [Palette_EM]               = hex(0x205a4eff),
     [Palette_ES]               = hex(0x193d31ff),
 };
+// END: Colors
 
-#define BOARD_SIZE 5
-#define BOARD_CENTER 12
-
-typedef enum Piece_Type {
-    Piece_MM = 0,
-    Piece_MS,
-    Piece_EM,
-    Piece_ES,
-
-    Piece_Count,
-} Piece_Type;
-
-Color get_piece_color(u8 piece) {
-    switch (piece) {
-    case Piece_MM: return PALETTE[Palette_MM];
-    case Piece_MS: return PALETTE[Palette_MS];
-    case Piece_EM: return PALETTE[Palette_EM];
-    case Piece_ES: return PALETTE[Palette_ES];
-    }
-
-    return PALETTE[Palette_BOARD];
-}
-
-typedef enum Move_Type {
-    Move_TIGER,
-    Move_DRAGON,
-    Move_FROG,
-    Move_RABBIT,
-    Move_CRAB,
-    Move_ELEPHANT,
-    Move_GOOSE,
-    Move_ROOSTER,
-    Move_MONKEY,
-    Move_MANTIS,
-    Move_HORSE,
-    Move_OX,
-    Move_CRANE,
-    Move_BOAR,
-    Move_EEL,
-    Move_COBRA,
-
-    Move_Count,
-} Move_Type;
-
-// all the global data that will change during game
-static struct G {
-    u32 PIECES[Piece_Count];
-    i32 highlighted_index;
-    i32 selected_index;
-    usize selected_group;
-    usize selected_move;
-    bool control_mode_mouse;
-} G = {
-    .PIECES = {
-        [Piece_MM] = 
-            DEFINE_TABLE(
-                00000,
-                00000,
-                00000,
-                00000,
-                00100,
-            ),
-        [Piece_EM] =
-            DEFINE_TABLE(
-                00100,
-                00000,
-                00000,
-                00000,
-                00000,
-            ),
-        [Piece_MS] = 
-            DEFINE_TABLE(
-                00000,
-                00000,
-                00000,
-                00000,
-                11011,
-            ),
-        [Piece_ES] =
-            DEFINE_TABLE(
-                11011,
-                00000,
-                00000,
-                00000,
-                00000,
-            ),
-    },
-    .highlighted_index = 12,
-    .selected_index = -1,
-    .selected_group = Piece_Count,
-    .selected_move = Move_ROOSTER,
-    .control_mode_mouse = false,
-};
-
-void select_piece(usize group, i32 index) {
-    G.selected_group = group;
-    G.selected_index = index;
-}
-
-void unselect_piece(void) {
-    G.selected_group = Piece_Count;
-    G.selected_index = -1;
-}
-
+// START: Table Bit Management
 static inline u8 xy_to_index(u8 x, u8 y) {
     return (y * BOARD_SIZE + x);
 }
@@ -196,6 +114,51 @@ void disable_bit(u32 *table, u8 x, u8 y) {
 void disable_bit_index(u32 *table, u8 index) {
     disable_bit(table, index % BOARD_SIZE, index / BOARD_SIZE);
 }
+// END: Table Bit Management
+
+// START: Pieces
+typedef enum Piece_Type {
+    Piece_MM = 0,
+    Piece_MS,
+    Piece_EM,
+    Piece_ES,
+
+    Piece_Count,
+} Piece_Type;
+
+Color get_piece_color(u8 piece) {
+    switch (piece) {
+    case Piece_MM: return PALETTE[Palette_MM];
+    case Piece_MS: return PALETTE[Palette_MS];
+    case Piece_EM: return PALETTE[Palette_EM];
+    case Piece_ES: return PALETTE[Palette_ES];
+    }
+
+    return PALETTE[Palette_BOARD];
+}
+// END: Pieces
+
+// START: Movements
+typedef enum Move_Type {
+    Move_TIGER,
+    Move_DRAGON,
+    Move_FROG,
+    Move_RABBIT,
+    Move_CRAB,
+    Move_ELEPHANT,
+    Move_GOOSE,
+    Move_ROOSTER,
+    Move_MONKEY,
+    Move_MANTIS,
+    Move_HORSE,
+    Move_OX,
+    Move_CRANE,
+    Move_BOAR,
+    Move_EEL,
+    Move_COBRA,
+
+    Move_Count,
+} Move_Type;
 
 //https://boardgamegeek.com/image/2999035/onitama
 const u32 MOVE_TEMPLATES[Move_Count] = {
@@ -342,9 +305,6 @@ void calculate_moves(void) {
     }
 }
 
-#define MOVE_TEXTURE_SIZE 100.f
-#define MOVE_TEXTURE_RECT_SIZE (MOVE_TEXTURE_SIZE / BOARD_SIZE)
-
 void init_move_textures(void) {
     usize center = 2;
     for (usize i = 0; i < Move_Count; i++) {
@@ -375,20 +335,9 @@ void init_move_textures(void) {
         UnloadImage(img);
     }
 }
+// END: Movements
 
-Texture2D pawn_texture;
-
-const Rectangle board_rect = {
-    (WINDOW_WIDTH  - BOARD_WIDTH)  / 2,
-    (WINDOW_HEIGHT - BOARD_HEIGHT) / 2 - 50,
-    BOARD_WIDTH, BOARD_HEIGHT,
-};
-
-const f32 PIECE_WIDTH = 
-    (BOARD_WIDTH  / BOARD_SIZE);
-const f32 PIECE_HEIGHT = 
-    (BOARD_HEIGHT / BOARD_SIZE);
-
+// START: Various Functions
 static inline Vector2 get_piece_pos(usize x, usize y) {
     return (Vector2){
         board_rect.x + x * PIECE_WIDTH,
@@ -416,6 +365,68 @@ static inline Rectangle get_piece_rect_highlight(usize x, usize y) {
     piece_rect.height -= 2;
 
     return piece_rect;
+}
+// END: Various Functions
+
+// START: Global State
+// all the global data that will change during game
+static struct G {
+    u32 PIECES[Piece_Count];
+    i32 highlighted_index;
+    i32 selected_index;
+    usize selected_group;
+    usize selected_move;
+    bool control_mode_mouse;
+} G = {
+    .PIECES = {
+        [Piece_MM] = 
+            DEFINE_TABLE(
+                00000,
+                00000,
+                00000,
+                00000,
+                00100,
+            ),
+        [Piece_EM] =
+            DEFINE_TABLE(
+                00100,
+                00000,
+                00000,
+                00000,
+                00000,
+            ),
+        [Piece_MS] = 
+            DEFINE_TABLE(
+                00000,
+                00000,
+                00000,
+                00000,
+                11011,
+            ),
+        [Piece_ES] =
+            DEFINE_TABLE(
+                11011,
+                00000,
+                00000,
+                00000,
+                00000,
+            ),
+    },
+    .highlighted_index = 12,
+    .selected_index = -1,
+    .selected_group = Piece_Count,
+    .selected_move = Move_ROOSTER,
+    .control_mode_mouse = false,
+};
+
+void select_piece(usize group, i32 index) {
+    G.selected_group = group;
+    G.selected_index = index;
+}
+
+void unselect_piece(void) {
+    G.selected_group = Piece_Count;
+    G.selected_index = -1;
 }
 
 void draw_piece(usize x, usize y, Color c) {
@@ -476,6 +487,7 @@ void handle_selection(usize index) {
         }
     }
 }
+// END: Global State
 
 int main(void) {
     calculate_moves();
