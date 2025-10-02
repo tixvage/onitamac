@@ -11,7 +11,7 @@
 
 #define BORDER_THICKNESS 2.f
 
-// 25 bit + 7 bits must be skipped
+// 25 bit + (first) 7 bits must be skipped
 //                        i like to put `,` at the end
 //                                       |
 //                                       |
@@ -501,6 +501,7 @@ int main(void) {
             G.control_mode_mouse = !G.control_mode_mouse;
         }
         if (G.control_mode_mouse) {
+            G.highlighted_index = -1;
             Vector2 mouse_pos = GetMousePosition();
             if (CheckCollisionPointRec(mouse_pos, board_rect)) {
                 f32 dx = mouse_pos.x - board_rect.x;
@@ -605,10 +606,6 @@ int main(void) {
         DrawTexture(MOVE_TEXTURES[G.selected_move], (WINDOW_WIDTH - MOVE_TEXTURE_SIZE) / 2.f, WINDOW_HEIGHT - (MOVE_TEXTURE_SIZE + 30), WHITE);
 
         EndDrawing();
-
-        if (G.control_mode_mouse) {
-            G.highlighted_index = -1;
-        }
     }
 
     CloseWindow();
