@@ -312,8 +312,9 @@ const u32 MOVE_TEMPLATES[Move_Count] = {
 };
 
 static u32 MOVES[Move_Count][BOARD_SIZE*BOARD_SIZE] = { 0 };
+static Texture2D MOVE_TEXTURES[Move_Count] = { 0 };
 
-void precalculate_moves(void) {
+void calculate_moves(void) {
     usize center = 2;
 
     for (usize i = 0; i < Move_Count; i++) {
@@ -339,11 +340,45 @@ void precalculate_moves(void) {
     }
 }
 
+#define MOVE_TEXTURE_SIZE 100.f
+#define MOVE_TEXTURE_RECT_SIZE (MOVE_TEXTURE_SIZE / BOARD_SIZE)
+
+void init_move_textures(void) {
+    usize center = 2;
+    for (usize i = 0; i < Move_Count; i++) {
+        u32 template = MOVE_TEMPLATES[i];
+        Image img = GenImageColor(MOVE_TEXTURE_SIZE, MOVE_TEXTURE_SIZE, PALETTE[Palette_BOARD]);
+        for (usize y = 0; y < BOARD_SIZE; y++) {
+            for (usize x = 0; x < BOARD_SIZE; x++) {
+                Rectangle rect = {
+                    x * MOVE_TEXTURE_RECT_SIZE,
+                    y * MOVE_TEXTURE_RECT_SIZE,
+                    MOVE_TEXTURE_RECT_SIZE,
+                    MOVE_TEXTURE_RECT_SIZE,
+                };
+                ImageDrawRectangleLines(&img, rect, 1.f, PALETTE[Palette_BOARD_BORDER]);
+
+                if (y == center && x == center) {
+                    ImageDrawCircle(&img, rect.x + MOVE_TEXTURE_RECT_SIZE / 2.f, rect.y + MOVE_TEXTURE_RECT_SIZE / 2.f, MOVE_TEXTURE_RECT_SIZE * 0.3f, PALETTE[Palette_MM]);
+                    continue;
+                }
+                if (get_bit(template, x, y) == 0) {
+                    ImageDrawCircleLines(&img, rect.x + MOVE_TEXTURE_RECT_SIZE / 2.f, rect.y + MOVE_TEXTURE_RECT_SIZE / 2.f, MOVE_TEXTURE_RECT_SIZE * 0.3f, PALETTE[Palette_BOARD_BORDER]);
+                } else {
+                    ImageDrawCircle(&img, rect.x + MOVE_TEXTURE_RECT_SIZE / 2.f, rect.y + MOVE_TEXTURE_RECT_SIZE / 2.f, MOVE_TEXTURE_RECT_SIZE * 0.3f, PALETTE[Palette_EM]);
+                }
+            }
+        }
+        MOVE_TEXTURES[i] = LoadTextureFromImage(img);
+        UnloadImage(img);
+    }
+}
+
 Texture2D pawn_texture;
 
 const Rectangle board_rect = {
-    (WINDOW_WIDTH - BOARD_WIDTH) / 2,
-    (WINDOW_HEIGHT - BOARD_HEIGHT) / 2,
+    (WINDOW_WIDTH  - BOARD_WIDTH)  / 2,
+    (WINDOW_HEIGHT - BOARD_HEIGHT) / 2 - 50,
     BOARD_WIDTH, BOARD_HEIGHT,
 };
 
@@ -380,7 +415,6 @@ static inline Rectangle get_piece_rect_highlight(usize x, usize y) {
 
     return piece_rect;
 }
-
 
 void draw_piece(usize x, usize y, Color c) {
     Rectangle source = {
@@ -442,14 +476,25 @@ void handle_selection(usize index) {
 }
 
 int main(void) {
-    precalculate_moves();
+    calculate_moves();
 
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "game");
+    init_move_textures();
     SetTargetFPS(60);
 
     pawn_texture = LoadTexture("pawn.png");
 
     while (!WindowShouldClose()) {
+        {
+            i32 d = IsKeyPressed(KEY_X) - IsKeyPressed(KEY_Z);
+            i32 as_i = G.selected_move + d;
+            if (as_i >= Move_Count) {
+                as_i = 0;
+            } else if (as_i < 0) {
+                as_i = Move_Count - 1;
+            }
+            G.selected_move = as_i;
+        }
         if (IsKeyPressed(KEY_F)) {
             G.control_mode_mouse = !G.control_mode_mouse;
         }
@@ -473,9 +518,7 @@ int main(void) {
         } else {
             i32 dir_y = IsKeyPressed(KEY_DOWN)  - IsKeyPressed(KEY_UP);
             i32 dir_x = IsKeyPressed(KEY_RIGHT) - IsKeyPressed(KEY_LEFT);
-            i32 temp = G.highlighted_index;
-            temp += dir_y * BOARD_SIZE + dir_x;
-            G.highlighted_index = clamp(temp, 0, BOARD_SIZE*BOARD_SIZE - 1);
+            G.highlighted_index = clamp(G.highlighted_index + dir_y * BOARD_SIZE + dir_x, 0, BOARD_SIZE*BOARD_SIZE - 1);
 
             if (IsKeyPressed(KEY_BACKSPACE)) {
                 unselect_piece();
@@ -527,6 +570,29 @@ int main(void) {
                 }
             }
         }
+
+        Rectangle z_rect = board_rect;
+        z_rect.y     += z_rect.height + 35;
+        z_rect.width  = 70;
+        z_rect.height = 70;
+
+        DrawRectangleRec(z_rect, PALETTE[Palette_BOARD]);
+        DrawRectangleLinesEx(z_rect, 4.f, PALETTE[Palette_BOARD_BORDER]);
+        // TODO: hardcoded ahh
+        DrawText("Z", z_rect.x + 14, z_rect.y + 4, 70, PALETTE[Palette_BACKGROUND]);
+
+        Rectangle x_rect = board_rect;
+        x_rect.x     += x_rect.width - 70;
+        x_rect.y     += x_rect.height + 35;
+        x_rect.width  = 70;
+        x_rect.height = 70;
+
+        DrawRectangleRec(x_rect, PALETTE[Palette_BOARD]);
+        DrawRectangleLinesEx(x_rect, 4.f, PALETTE[Palette_BOARD_BORDER]);
+        // TODO: hardcoded ahh
+        DrawText("X", x_rect.x + 14, x_rect.y + 4, 70, PALETTE[Palette_BACKGROUND]);
+
+        DrawTexture(MOVE_TEXTURES[G.selected_move], (WINDOW_WIDTH - MOVE_TEXTURE_SIZE) / 2.f, WINDOW_HEIGHT - (MOVE_TEXTURE_SIZE + 30), WHITE);
 
         EndDrawing();
 
