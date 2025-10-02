@@ -434,6 +434,8 @@ int main(void) {
                         enable_bit(&G.PIECES[G.selected_group], x, y);
                         disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
                         unselect_piece();
+                    } else {
+                        unselect_piece();
                     }
                 } else {
                     for (usize i = Piece_MM; i <= Piece_MS; i++) {
@@ -443,6 +445,8 @@ int main(void) {
                     }
                 }
             }
+        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            unselect_piece();
         }
 
         BeginDrawing();
