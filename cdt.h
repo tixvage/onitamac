@@ -309,12 +309,11 @@ void cdt_error_handler(const char *file, i32 line, const char *pre_msg, const ch
 }
 
 void cdt_info_handler (const char *file, i32 line, const char *msg, ...) {
-    time_t current_time;
-    time(&current_time);
-    char *cstr = ctime(&current_time);
-    usize len = strlen(cstr);
-    cstr[len - 1] = '\0';
-    fprintf(stderr, "[%s]", cstr);
+    char timeStr[64] = { 0 };
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+    fprintf(stderr, "[%s]", timeStr);
     fprintf(stderr, "[INFO](%s:%d): ", file, line);
     if (msg) {
         va_list va;

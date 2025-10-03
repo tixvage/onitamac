@@ -374,6 +374,27 @@ static inline Rectangle get_piece_rect_highlight(usize x, usize y) {
 
     return piece_rect;
 }
+
+void custom_raylib_log(int msgType, const char *text, va_list args) {
+    char timeStr[64] = { 0 };
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", tm_info);
+    fprintf(stderr, "[%s]", timeStr);
+
+    switch (msgType)
+    {
+        case LOG_INFO: printf("[INFO](raylib): "); break;
+        case LOG_ERROR: printf("[ERROR](raylib): "); break;
+        case LOG_WARNING: printf("[WARN](raylib): "); break;
+        case LOG_DEBUG: printf("[DEBUG](raylib): "); break;
+        default: break;
+    }
+
+    vprintf(text, args);
+    printf("\n");
+}
 // END: Various Functions
 
 // START: Global State
@@ -533,6 +554,7 @@ int main(void) {
     calculate_moves();
     info("movevements calculated successfully");
 
+    SetTraceLogCallback(custom_raylib_log);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "game");
     init_move_textures();
     info("movevement textures created successfully");
