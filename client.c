@@ -6,6 +6,8 @@
 #define ENET_IMPLEMENTATION
 #include "enet.h"
 
+#include "common.h"
+
 // START: Macros & Constants
 #define WINDOW_WIDTH  800
 #define WINDOW_HEIGHT 600
@@ -23,6 +25,9 @@
 
 #define PIECE_WIDTH (BOARD_WIDTH  / BOARD_SIZE)
 #define PIECE_HEIGHT (BOARD_HEIGHT / BOARD_SIZE)
+
+#define HOST_ADDRESS "127.0.0.1"
+#define PORT_ADDRESS 7777
 
 // 25 bit + (first) 7 bits must be skipped
 //                        i like to put `,` at the end
@@ -380,6 +385,9 @@ static struct G {
     usize selected_group;
     usize selected_move;
     bool control_mode_mouse;
+    ENetHost *client;
+    ENetPeer *peer;
+    u32 id;
 } G = {
     .PIECES = {
         [Piece_MM] = 
@@ -420,6 +428,8 @@ static struct G {
     .selected_group = Piece_Count,
     .selected_move = Move_ROOSTER,
     .control_mode_mouse = false,
+    .client = NULL,
+    .peer   = NULL,
 };
 
 void select_piece(usize group, i32 index) {
@@ -493,15 +503,45 @@ void handle_selection(usize index) {
 // END: Global State
 
 int main(void) {
+    if (enet_initialize() != 0) {
+        panic("an error occurred while initializing enet");
+    }
+    info("enet initialized successfully");
+    G.client = enet_host_create(NULL, 1, 2, 0, 0);
+    if (!G.client) {
+        panic("an error occurred while trying to create an ENet client host");
+    }
+    info("client host created successfully");
+    ENetAddress address = { 0 };
+    address.port = PORT_ADDRESS;
+    enet_address_set_host(&address, HOST_ADDRESS);
+
+    ENetEvent event = { 0 };
+    G.peer = enet_host_connect(G.client, &address, 2, 0);
+    if (!G.peer) {
+        panic("no available peers for initiating an enet connection");
+    }
+    info("available peers for enet connection");
+    if (enet_host_service(G.client, &event, 5000) > 0 &&
+            event.type == ENET_EVENT_TYPE_CONNECT) {
+        info("connection to "HOST_ADDRESS" succeeded");
+    } else {
+        enet_peer_reset(G.peer);
+        panic("connection to "HOST_ADDRESS" failed");
+    }
+
     calculate_moves();
+    info("movevements calculated successfully");
 
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "game");
     init_move_textures();
+    info("movevement textures created successfully");
     SetTargetFPS(60);
 
     pawn_texture = LoadTexture("pawn.png");
 
     while (!WindowShouldClose()) {
+        // Inputs
         {
             i32 d = IsKeyPressed(KEY_X) - IsKeyPressed(KEY_Z);
             i32 as_i = G.selected_move + d;
@@ -514,6 +554,9 @@ int main(void) {
         }
         if (IsKeyPressed(KEY_F)) {
             G.control_mode_mouse = !G.control_mode_mouse;
+        }
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            G.control_mode_mouse = true;
         }
         if (G.control_mode_mouse) {
             G.highlighted_index = -1;
@@ -547,6 +590,26 @@ int main(void) {
             }
         }
 
+        // Networking
+        if (enet_host_service(G.client, &event, 0) > 0) {
+            switch (event.type) {
+            case ENET_EVENT_TYPE_RECEIVE: {
+                info("new packet");
+                Packet p = *cast(Packet *)event.packet;
+                switch (p.type) {
+                case Packet_GIVE_ID: {
+                    G.id = p.give_id;
+                } break;
+                case Packet_SAY_HELLO: {
+                } break;
+                case Packet_Count: {
+                } break;
+                }
+            } break;
+            }
+        }
+
+        // Rendering
         BeginDrawing();
         ClearBackground(PALETTE[Palette_BACKGROUND]);
 
@@ -624,5 +687,34 @@ int main(void) {
     }
 
     CloseWindow();
+
+    enet_host_service(G.client, &event, 5000);
+    enet_peer_disconnect(G.peer, 0);
+
+    bool disconnected = false;
+    while (enet_host_service(G.client, &event, 3000) > 0) {
+        switch (event.type) {
+        case ENET_EVENT_TYPE_RECEIVE: {
+            enet_packet_destroy(event.packet);
+        } break;
+        case ENET_EVENT_TYPE_DISCONNECT: {
+            // TODO: Logging system for `cdt.h`
+            info("disconnection succeeded");
+            disconnected = true;
+        } break;
+        case ENET_EVENT_TYPE_NONE: {
+        } break;
+        }
+    }
+
+    if (!disconnected) {
+        enet_peer_reset(G.peer);
+    }
+
+    enet_host_destroy(G.client);
+    enet_deinitialize();
+
+    info("enet deinitialized");
+
     return 0;
 }

@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <time.h>
 
 //copy paster from `https://stackoverflow.com/a/26408195`
 // get number of arguments with __NARG__
@@ -186,12 +187,17 @@ typedef fcolor4 color4;
 #define color4(...) VFUNC(_V4F, __VA_ARGS__)
 
 void cdt_error_handler(const char *file, i32 line, const char *pre_msg, const char *msg, ...);
+void cdt_info_handler (const char *file, i32 line, const char *msg, ...);
 
 #define CDT_ASSERT assert
 #define CDT_TRAP() abort()
 
 #define cast(T) (T)
 #define unused (void)
+
+#define info(msg, ...) do { \
+    cdt_info_handler(__FILE__, __LINE__, msg, ##__VA_ARGS__); \
+} while(0)
 
 #define panic(msg, ...) do { \
     cdt_error_handler(__FILE__, __LINE__, NULL, msg, ##__VA_ARGS__); \
@@ -291,6 +297,25 @@ void cdt_error_handler(const char *file, i32 line, const char *pre_msg, const ch
     if (pre_msg) {
         fprintf(stderr, "%s: ", pre_msg);
     }
+    if (msg) {
+        va_list va;
+        va_start(va, msg);
+        vfprintf(stderr, msg, va);
+        va_end(va);
+    } else {
+        fprintf(stderr, "unspecified");
+    }
+    fprintf(stderr, "\n");
+}
+
+void cdt_info_handler (const char *file, i32 line, const char *msg, ...) {
+    time_t current_time;
+    time(&current_time);
+    char *cstr = ctime(&current_time);
+    usize len = strlen(cstr);
+    cstr[len - 1] = '\0';
+    fprintf(stderr, "[%s]", cstr);
+    fprintf(stderr, "[INFO](%s:%d): ", file, line);
     if (msg) {
         va_list va;
         va_start(va, msg);
