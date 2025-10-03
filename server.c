@@ -9,17 +9,33 @@
 #include "common.h"
 
 #define MAX_CLIENTS 2
-
-typedef struct Client {
-    u32 id;
-    ENetPeer *peer;
-} Client;
+#define MAX_MATCHS (MAX_CLIENTS/2)
 
 // Ultimate unique id generator
 u32 id_counter = 5;
 u32 gen_id(void) {
     return ++id_counter;
 }
+
+Match matchs[MAX_MATCHS] = { 0 };
+usize matchs_count = 0;
+
+Match *new_match(void) {
+    return &matchs[matchs_count++];
+}
+
+Match *find_match_id(u32 id) {
+    for (usize i = 0; i < matchs_count; i++) {
+        if (matchs[i].id == id) return &matchs[i];
+    }
+
+    return NULL;
+}
+
+typedef struct Client {
+    u32 id;
+    ENetPeer *peer;
+} Client;
 
 Client clients[MAX_CLIENTS] = { 0 };
 usize  clients_count = 0;
@@ -80,6 +96,24 @@ int main() {
                 info("new connection client(%lu)", c->id);
                 ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
                 enet_peer_send(event.peer, 0, packet);
+
+                if (clients_count == 2) {
+                    info("enough players for match");
+                    Client c1 = clients[clients_count - 2];
+                    Client c2 = clients[clients_count - 1];
+                    Match *match = new_match();
+                    match->id    = gen_id();
+                    match->c[0]  = c1.id;
+                    match->c[1]  = c2.id;
+                    info("match(%lu) created", match->id);
+                    Packet p = {
+                        .type = Packet_NEW_MATCH,
+                        .new_match = *match,
+                    };
+                    ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
+                    enet_peer_send(c1.peer, 0, packet);
+                    enet_peer_send(c2.peer, 0, packet);
+                }
             } break;
 
             case ENET_EVENT_TYPE_RECEIVE: {
@@ -87,6 +121,33 @@ int main() {
                         event.packet->dataLength,
                         find_client_peer(event.peer)->id,
                         event.channelID);
+                Client *sender = find_client_peer(event.peer);
+                Packet p = *cast(Packet *)event.packet->data;
+                switch (p.type) {
+                case Packet_MOVE: {
+                    info("new move");
+                    Match *match = find_match_id(p.move.match_id);
+                    u32 target_id = match->c[0];
+                    if (sender->id == target_id) {
+                        target_id = match->c[1];
+                    }
+                    Client *opp = find_client_id(target_id);
+                    // Maybe we need to flip move data in there
+                    Move m = p.move;
+                    Packet p = {
+                        .type = Packet_MOVE,
+                        .move = m,
+                    };
+                    ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
+                    enet_peer_send(opp->peer, 0, packet);
+                } break;
+                case Packet_NEW_MATCH:
+                case Packet_SAY_HELLO:
+                case Packet_GIVE_ID:
+                case Packet_Count: {
+                    info("invalid packet");
+                } break;
+                }
                 enet_packet_destroy (event.packet);
             } break;
 

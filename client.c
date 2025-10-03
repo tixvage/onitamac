@@ -409,6 +409,8 @@ static struct G {
     ENetHost *client;
     ENetPeer *peer;
     u32 id;
+    bool turn;
+    u32 match_id;
 } G = {
     .PIECES = {
         [Piece_MM] = 
@@ -449,8 +451,10 @@ static struct G {
     .selected_group = Piece_Count,
     .selected_move = Move_ROOSTER,
     .control_mode_mouse = false,
-    .client = NULL,
-    .peer   = NULL,
+    .client   = NULL,
+    .peer     = NULL,
+    .turn     = false,
+    .match_id = 0
 };
 
 void select_piece(usize group, i32 index) {
@@ -498,19 +502,38 @@ void draw_piece_group(Piece_Type type) {
 }
 
 void handle_selection(usize index) {
+    if (!G.turn) return;
     if (G.selected_index != -1) {
         u32 moves = MOVES[G.selected_move][G.selected_index];
         u32 friends = G.PIECES[Piece_MS] | G.PIECES[Piece_MM];
 
         moves &= ~friends;
         if (get_bit_index(moves, G.highlighted_index) > 0) {
+            Move move = {
+                .match_id  = G.match_id,
+                .m = {
+                    .group = G.selected_group,
+                    .from  = G.selected_index,
+                    .to    = index,
+                },
+            };
             enable_bit_index(&G.PIECES[G.selected_group], index);
             for (usize i = Piece_EM; i <= Piece_ES; i++) {
                 if (get_bit_index(G.PIECES[i], index) > 0) {
+                    move.e.eat   = true;
+                    move.e.group = i;
+                    move.e.index = index;
                     disable_bit_index(&G.PIECES[i], index);
                 }
             }
             disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
+            G.turn = false;
+            Packet p = {
+                .type = Packet_MOVE,
+                .move = move,
+            };
+            ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
+            enet_peer_send(G.peer, 0, packet);
         }
         unselect_piece();
     } else {
@@ -520,6 +543,11 @@ void handle_selection(usize index) {
             break;
         }
     }
+}
+
+void new_match(Match match) {
+    G.turn = match.c[0] == G.id;
+    G.match_id = match.id;
 }
 // END: Global State
 
@@ -616,17 +644,41 @@ int main(void) {
         if (enet_host_service(G.client, &event, 0) > 0) {
             switch (event.type) {
             case ENET_EVENT_TYPE_RECEIVE: {
-                info("new packet");
-                Packet p = *cast(Packet *)event.packet;
+                info("a packet of length %lu was received on channel %u",
+                        event.packet->dataLength,
+                        event.channelID);
+                Packet p = *cast(Packet *)event.packet->data;
                 switch (p.type) {
                 case Packet_GIVE_ID: {
                     G.id = p.give_id;
+                    SetWindowTitle(TextFormat("client(%lu)", G.id));
                 } break;
                 case Packet_SAY_HELLO: {
                 } break;
+                case Packet_NEW_MATCH: {
+                    info("match found");
+                    new_match(p.new_match);
+                } break;
+                case Packet_MOVE: {
+                    info("turn");
+                    G.turn = true;
+                    // Flip move
+                    Move move = p.move;
+                    usize moved_group = move.m.group + 2;
+                    u8    moved_from  = (BOARD_SIZE*BOARD_SIZE-1) - move.m.from;
+                    u8    moved_to    = (BOARD_SIZE*BOARD_SIZE-1) - move.m.to;
+
+                    disable_bit_index(&G.PIECES[moved_group], moved_from);
+                    enable_bit_index (&G.PIECES[moved_group], moved_to);
+                    // TODO: eating
+                }
                 case Packet_Count: {
                 } break;
                 }
+                enet_packet_destroy (event.packet);
+            } break;
+            default: {
+                info("unhandled enet event(%d)", event.type);
             } break;
             }
         }
@@ -724,8 +776,7 @@ int main(void) {
             info("disconnection succeeded");
             disconnected = true;
         } break;
-        case ENET_EVENT_TYPE_NONE: {
-        } break;
+        default: break;
         }
     }
 
