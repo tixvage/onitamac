@@ -385,10 +385,10 @@ void custom_raylib_log(int msgType, const char *text, va_list args) {
 
     switch (msgType)
     {
-        case LOG_INFO: printf("[INFO](raylib): "); break;
-        case LOG_ERROR: printf("[ERROR](raylib): "); break;
-        case LOG_WARNING: printf("[WARN](raylib): "); break;
-        case LOG_DEBUG: printf("[DEBUG](raylib): "); break;
+        case LOG_INFO: fprintf(stderr, "[INFO](raylib): "); break;
+        case LOG_ERROR: fprintf(stderr, "[ERROR](raylib): "); break;
+        case LOG_WARNING: fprintf(stderr, "[WARN](raylib): "); break;
+        case LOG_DEBUG: fprintf(stderr, "[DEBUG](raylib): "); break;
         default: break;
     }
 
@@ -534,6 +534,7 @@ void handle_selection(usize index) {
             };
             ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
             enet_peer_send(G.peer, 0, packet);
+            info("turn finished");
         }
         unselect_piece();
     } else {
@@ -660,7 +661,6 @@ int main(void) {
                     new_match(p.new_match);
                 } break;
                 case Packet_MOVE: {
-                    info("turn");
                     G.turn = true;
                     // Flip move
                     Move move = p.move;
@@ -668,9 +668,18 @@ int main(void) {
                     u8    moved_from  = (BOARD_SIZE*BOARD_SIZE-1) - move.m.from;
                     u8    moved_to    = (BOARD_SIZE*BOARD_SIZE-1) - move.m.to;
 
+                    info("move group(%lu) from index(%u) to index(%u)", moved_group, moved_from, moved_to);
+
                     disable_bit_index(&G.PIECES[moved_group], moved_from);
                     enable_bit_index (&G.PIECES[moved_group], moved_to);
                     // TODO: eating
+                    if (move.e.eat) {
+                        usize eaten_group = move.e.group - 2;
+                        u8 index = (BOARD_SIZE*BOARD_SIZE-1) - move.e.index;
+                        info("eat group(%lu) in index(%u)", eaten_group, index);
+                        disable_bit_index(&G.PIECES[eaten_group], index);
+                    }
+                    info("turn started");
                 }
                 case Packet_Count: {
                 } break;

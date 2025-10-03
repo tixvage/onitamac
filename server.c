@@ -125,8 +125,8 @@ int main() {
                 Packet p = *cast(Packet *)event.packet->data;
                 switch (p.type) {
                 case Packet_MOVE: {
-                    info("new move");
                     Match *match = find_match_id(p.move.match_id);
+                    info("move in match(%lu) from client(%lu) > group(%lu) from(%u) to(%u)", match->id, sender->id, p.move.m.group, p.move.m.from, p.move.m.to);
                     u32 target_id = match->c[0];
                     if (sender->id == target_id) {
                         target_id = match->c[1];
