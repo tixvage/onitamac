@@ -54,38 +54,45 @@ const Rectangle board_rect = {
     BOARD_WIDTH, BOARD_HEIGHT,
 };
 
-Texture2D pawn_texture;
+Texture2D soldier_texture;
+Texture2D master_texture;
 // END: Macros & Constants
 
 // START: Colors
 typedef enum Palette_Colors {
     Palette_BACKGROUND,
     Palette_BOARD,
-    Palette_BOARD_HIGHLIGHT1,
-    Palette_BOARD_HIGHLIGHT2,
-    Palette_BOARD_HIGHLIGHT3,
-    Palette_BOARD_HIGHLIGHT4,
     Palette_BOARD_BORDER,
     Palette_MM,
     Palette_MS,
     Palette_EM,
     Palette_ES,
+    Palette_HIGHLIGHT,
+    Palette_CHOSEN,
+    Palette_INVALID_MOVE,
+    Palette_VALID_MOVE,
+    Palette_EAT_MOVE,
+    Palette_ENEMY_FROM,
+    Palette_ENEMY_TO,
 
     Palette_Count,
 } Palette_Colors;
 
 const Color PALETTE[Palette_Count] = {
-    [Palette_BACKGROUND]       = hex(0x0d0e14ff),
-    [Palette_BOARD]            = hex(0x252933ff),
-    [Palette_BOARD_HIGHLIGHT1] = hex(0x333f4cff),
-    [Palette_BOARD_HIGHLIGHT2] = hex(0x404556ff),
-    [Palette_BOARD_HIGHLIGHT3] = hex(0x60515cff),
-    [Palette_BOARD_HIGHLIGHT4] = hex(0x504556ff),
-    [Palette_BOARD_BORDER]     = hex(0x0f151dff),
-    [Palette_MM]               = hex(0x597d7cff),
-    [Palette_MS]               = hex(0x386775ff),
-    [Palette_EM]               = hex(0x205a4eff),
-    [Palette_ES]               = hex(0x193d31ff),
+    [Palette_BACKGROUND]   = hex(0x0d0e14ff),
+    [Palette_BOARD]        = hex(0x252933ff),
+    [Palette_BOARD_BORDER] = hex(0x0f151dff),
+    [Palette_MM]           = hex(0x597d7cff),
+    [Palette_MS]           = hex(0x386775ff),
+    [Palette_EM]           = hex(0x205a4eff),
+    [Palette_ES]           = hex(0x193d31ff),
+    [Palette_HIGHLIGHT]    = hex(0x333f4cff),
+    [Palette_CHOSEN]       = hex(0x404556ff),
+    [Palette_INVALID_MOVE] = hex(0x60515cff),
+    [Palette_VALID_MOVE]   = hex(0x504556ff),
+    [Palette_EAT_MOVE]     = hex(0x75505aff),
+    [Palette_ENEMY_FROM]   = hex(0x205a4eff),
+    [Palette_ENEMY_TO]     = hex(0x193d31ff),
 };
 // END: Colors
 
@@ -411,6 +418,8 @@ static struct G {
     u32 id;
     bool turn;
     u32 match_id;
+    i8 e_moved_to;
+    i8 e_moved_from;
 } G = {
     .PIECES = {
         [Piece_MM] = 
@@ -454,7 +463,9 @@ static struct G {
     .client   = NULL,
     .peer     = NULL,
     .turn     = false,
-    .match_id = 0
+    .match_id = 0,
+    .e_moved_to   = -1,
+    .e_moved_from = -1,
 };
 
 void select_piece(usize group, i32 index) {
@@ -467,38 +478,26 @@ void unselect_piece(void) {
     G.selected_index = -1;
 }
 
-void draw_piece(usize x, usize y, Color c) {
+void draw_piece(usize x, usize y, Texture2D t, Color c) {
     Rectangle source = {
         0, 0,
-        pawn_texture.width,
-        pawn_texture.height,
+        t.width,
+        t.height,
     };
     usize index = y * BOARD_SIZE + x;
     const f32 scale_factor = G.highlighted_index == cast(i32) index ? 4.f : 3.f;
     f32 pos_x = board_rect.x + x * PIECE_WIDTH;
     f32 pos_y = board_rect.y + y * PIECE_HEIGHT;
     Rectangle dest = {
-        pos_x + (PIECE_WIDTH - pawn_texture.width * scale_factor) / 2,
-        pos_y + (PIECE_HEIGHT - pawn_texture.height * scale_factor) / 2,
-        pawn_texture.width  * scale_factor,
-        pawn_texture.height * scale_factor,
+        pos_x + (PIECE_WIDTH  - t.width  * scale_factor) / 2,
+        pos_y + (PIECE_HEIGHT - t.height * scale_factor) / 2,
+        t.width  * scale_factor,
+        t.height * scale_factor,
     };
     Vector2 origin = {
         0, 0,
     };
-    DrawTexturePro(pawn_texture, source, dest, origin, 0, c);
-}
-
-void draw_piece_group(Piece_Type type) {
-    u32 p = G.PIECES[type];
-    Color c = get_piece_color(type);
-    for (usize y = 0; y < BOARD_SIZE; y++) {
-        for (usize x = 0; x < BOARD_SIZE; x++) {
-            u8 bit = get_bit(p, x, y);
-            if (bit == 0) continue;
-            draw_piece(x, y, c);
-        }
-    }
+    DrawTexturePro(t, source, dest, origin, 0, c);
 }
 
 void handle_selection(usize index) {
@@ -528,6 +527,9 @@ void handle_selection(usize index) {
             }
             disable_bit_index(&G.PIECES[G.selected_group], G.selected_index);
             G.turn = false;
+            // Reset previous enemy move it is pointless to still being able to see after our turn finishes
+            G.e_moved_from = -1;
+            G.e_moved_to   = -1;
             Packet p = {
                 .type = Packet_MOVE,
                 .move = move,
@@ -589,7 +591,8 @@ int main(void) {
     info("movevement textures created successfully");
     SetTargetFPS(60);
 
-    pawn_texture = LoadTexture("pawn.png");
+    soldier_texture = LoadTexture("soldier.png");
+    master_texture = LoadTexture("master.png");
 
     while (!WindowShouldClose()) {
         // Inputs
@@ -670,6 +673,8 @@ int main(void) {
 
                     info("move group(%lu) from index(%u) to index(%u)", moved_group, moved_from, moved_to);
 
+                    G.e_moved_from = moved_from;
+                    G.e_moved_to   = moved_to;
                     disable_bit_index(&G.PIECES[moved_group], moved_from);
                     enable_bit_index (&G.PIECES[moved_group], moved_to);
                     // TODO: eating
@@ -708,7 +713,13 @@ int main(void) {
                 // TODO: Put one more pixel line around the whole board
                 DrawRectangleLinesEx(piece_rect, BORDER_THICKNESS / 2.f, PALETTE[Palette_BOARD_BORDER]);
                 if (G.selected_index == cast(i32) index) {
-                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT2]);
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_CHOSEN]);
+                }
+                if (G.e_moved_from == cast(i8) index) {
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_ENEMY_FROM]);
+                }
+                if (G.e_moved_to == cast(i8) index) {
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_ENEMY_TO]);
                 }
 
                 if (G.selected_index != -1) {
@@ -719,26 +730,28 @@ int main(void) {
                     u32 valid_moves = moves & ~friends;
                     if (get_bit(moves, x, y) > 0) {
                         Rectangle rect = get_piece_rect_highlight(x, y);
-                        Color c = PALETTE[Palette_BOARD_HIGHLIGHT3];
+                        Color c = PALETTE[Palette_INVALID_MOVE];
                         if (get_bit(valid_moves, x, y) > 0) {
-                            c = PALETTE[Palette_BOARD_HIGHLIGHT2];
+                            c = PALETTE[Palette_VALID_MOVE];
                         }
                         if (get_bit(enemies, x, y) > 0) {
-                            c = PALETTE[Palette_BOARD_HIGHLIGHT4];
+                            c = PALETTE[Palette_EAT_MOVE];
                         }
                         DrawRectangleRec(rect, c);
                     }
                 }
                 if (G.highlighted_index == cast(i32) index) {
-                    DrawRectangleRec(highlight_rect, PALETTE[Palette_BOARD_HIGHLIGHT1]);
+                    DrawRectangleRec(highlight_rect, PALETTE[Palette_HIGHLIGHT]);
                 }
 
                 for (usize i = 0; i < Piece_Count; i++) {
                     u32 p = G.PIECES[i];
-                    Color c = get_piece_color(i);
                     u8 bit = get_bit(p, x, y);
                     if (bit == 0) continue;
-                    draw_piece(x, y, c);
+                    Color c = get_piece_color(i);
+                    Texture2D t = soldier_texture;
+                    if (i == Piece_MM || i == Piece_EM) t = master_texture;
+                    draw_piece(x, y, t, c);
                 }
             }
         }
@@ -781,7 +794,6 @@ int main(void) {
             enet_packet_destroy(event.packet);
         } break;
         case ENET_EVENT_TYPE_DISCONNECT: {
-            // TODO: Logging system for `cdt.h`
             info("disconnection succeeded");
             disconnected = true;
         } break;
