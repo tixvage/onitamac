@@ -1,3 +1,7 @@
+#if defined(_WIN32)
+    #include "fix_win32_comp.h"
+#endif
+
 #include <raylib.h>
 
 #define CDT_IMPL
@@ -485,7 +489,7 @@ void draw_piece(usize x, usize y, Texture2D t, Color c) {
         t.height,
     };
     usize index = y * BOARD_SIZE + x;
-    const f32 scale_factor = G.highlighted_index == cast(i32) index ? 4.f : 3.f;
+    const f32 scale_factor = G.highlighted_index == CAST(i32) index ? 4.f : 3.f;
     f32 pos_x = board_rect.x + x * PIECE_WIDTH;
     f32 pos_y = board_rect.y + y * PIECE_HEIGHT;
     Rectangle dest = {
@@ -536,7 +540,7 @@ void handle_selection(usize index) {
             };
             ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
             enet_peer_send(G.peer, 0, packet);
-            info("turn finished");
+            INFO("turn finished");
         }
         unselect_piece();
     } else {
@@ -556,14 +560,14 @@ void new_match(Match match) {
 
 int main(void) {
     if (enet_initialize() != 0) {
-        panic("an error occurred while initializing enet");
+        PANIC("an error occurred while initializing enet");
     }
-    info("enet initialized successfully");
+    INFO("enet initialized successfully");
     G.client = enet_host_create(NULL, 1, 2, 0, 0);
     if (!G.client) {
-        panic("an error occurred while trying to create an ENet client host");
+        PANIC("an error occurred while trying to create an ENet client host");
     }
-    info("client host created successfully");
+    INFO("client host created successfully");
     ENetAddress address = { 0 };
     address.port = PORT_ADDRESS;
     enet_address_set_host(&address, HOST_ADDRESS);
@@ -571,24 +575,24 @@ int main(void) {
     ENetEvent event = { 0 };
     G.peer = enet_host_connect(G.client, &address, 2, 0);
     if (!G.peer) {
-        panic("no available peers for initiating an enet connection");
+        PANIC("no available peers for initiating an enet connection");
     }
-    info("available peers for enet connection");
+    INFO("available peers for enet connection");
     if (enet_host_service(G.client, &event, 5000) > 0 &&
             event.type == ENET_EVENT_TYPE_CONNECT) {
-        info("connection to "HOST_ADDRESS" succeeded");
+        INFO("connection to "HOST_ADDRESS" succeeded");
     } else {
         enet_peer_reset(G.peer);
-        panic("connection to "HOST_ADDRESS" failed");
+        PANIC("connection to "HOST_ADDRESS" failed");
     }
 
     calculate_moves();
-    info("movevements calculated successfully");
+    INFO("movevements calculated successfully");
 
     SetTraceLogCallback(custom_raylib_log);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "game");
     init_move_textures();
-    info("movevement textures created successfully");
+    INFO("movevement textures created successfully");
     SetTargetFPS(60);
 
     soldier_texture = LoadTexture("soldier.png");
@@ -633,7 +637,7 @@ int main(void) {
         } else {
             i32 dir_y = IsKeyPressed(KEY_DOWN)  - IsKeyPressed(KEY_UP);
             i32 dir_x = IsKeyPressed(KEY_RIGHT) - IsKeyPressed(KEY_LEFT);
-            G.highlighted_index = clamp(G.highlighted_index + dir_y * BOARD_SIZE + dir_x, 0, BOARD_SIZE*BOARD_SIZE - 1);
+            G.highlighted_index = CLAMP(G.highlighted_index + dir_y * BOARD_SIZE + dir_x, 0, BOARD_SIZE*BOARD_SIZE - 1);
 
             if (IsKeyPressed(KEY_BACKSPACE)) {
                 unselect_piece();
@@ -648,10 +652,10 @@ int main(void) {
         if (enet_host_service(G.client, &event, 0) > 0) {
             switch (event.type) {
             case ENET_EVENT_TYPE_RECEIVE: {
-                info("a packet of length %lu was received on channel %u",
+                INFO("a packet of length %lu was received on channel %u",
                         event.packet->dataLength,
                         event.channelID);
-                Packet p = *cast(Packet *)event.packet->data;
+                Packet p = *CAST(Packet *)event.packet->data;
                 switch (p.type) {
                 case Packet_GIVE_ID: {
                     G.id = p.give_id;
@@ -660,7 +664,7 @@ int main(void) {
                 case Packet_SAY_HELLO: {
                 } break;
                 case Packet_NEW_MATCH: {
-                    info("match found");
+                    INFO("match found");
                     new_match(p.new_match);
                 } break;
                 case Packet_MOVE: {
@@ -671,7 +675,7 @@ int main(void) {
                     u8    moved_from  = (BOARD_SIZE*BOARD_SIZE-1) - move.m.from;
                     u8    moved_to    = (BOARD_SIZE*BOARD_SIZE-1) - move.m.to;
 
-                    info("move group(%lu) from index(%u) to index(%u)", moved_group, moved_from, moved_to);
+                    INFO("move group(%lu) from index(%u) to index(%u)", moved_group, moved_from, moved_to);
 
                     G.e_moved_from = moved_from;
                     G.e_moved_to   = moved_to;
@@ -681,10 +685,10 @@ int main(void) {
                     if (move.e.eat) {
                         usize eaten_group = move.e.group - 2;
                         u8 index = (BOARD_SIZE*BOARD_SIZE-1) - move.e.index;
-                        info("eat group(%lu) in index(%u)", eaten_group, index);
+                        INFO("eat group(%lu) in index(%u)", eaten_group, index);
                         disable_bit_index(&G.PIECES[eaten_group], index);
                     }
-                    info("turn started");
+                    INFO("turn started");
                 }
                 case Packet_Count: {
                 } break;
@@ -692,7 +696,7 @@ int main(void) {
                 enet_packet_destroy (event.packet);
             } break;
             default: {
-                info("unhandled enet event(%d)", event.type);
+                INFO("unhandled enet event(%d)", event.type);
             } break;
             }
         }
@@ -712,13 +716,13 @@ int main(void) {
                 Rectangle highlight_rect = get_piece_rect_highlight(x, y);
                 // TODO: Put one more pixel line around the whole board
                 DrawRectangleLinesEx(piece_rect, BORDER_THICKNESS / 2.f, PALETTE[Palette_BOARD_BORDER]);
-                if (G.selected_index == cast(i32) index) {
+                if (G.selected_index == CAST(i32) index) {
                     DrawRectangleRec(highlight_rect, PALETTE[Palette_CHOSEN]);
                 }
-                if (G.e_moved_from == cast(i8) index) {
+                if (G.e_moved_from == CAST(i8) index) {
                     DrawRectangleRec(highlight_rect, PALETTE[Palette_ENEMY_FROM]);
                 }
-                if (G.e_moved_to == cast(i8) index) {
+                if (G.e_moved_to == CAST(i8) index) {
                     DrawRectangleRec(highlight_rect, PALETTE[Palette_ENEMY_TO]);
                 }
 
@@ -740,7 +744,7 @@ int main(void) {
                         DrawRectangleRec(rect, c);
                     }
                 }
-                if (G.highlighted_index == cast(i32) index) {
+                if (G.highlighted_index == CAST(i32) index) {
                     DrawRectangleRec(highlight_rect, PALETTE[Palette_HIGHLIGHT]);
                 }
 
@@ -794,7 +798,7 @@ int main(void) {
             enet_packet_destroy(event.packet);
         } break;
         case ENET_EVENT_TYPE_DISCONNECT: {
-            info("disconnection succeeded");
+            INFO("disconnection succeeded");
             disconnected = true;
         } break;
         default: break;
@@ -808,7 +812,7 @@ int main(void) {
     enet_host_destroy(G.client);
     enet_deinitialize();
 
-    info("enet deinitialized");
+    INFO("enet deinitialized");
 
     return 0;
 }

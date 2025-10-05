@@ -192,20 +192,20 @@ void cdt_info_handler (const char *file, i32 line, const char *msg, ...);
 #define CDT_ASSERT assert
 #define CDT_TRAP() abort()
 
-#define cast(T) (T)
-#define unused (void)
+#define CAST(T) (T)
+#define UNUSED (void)
 
-#define info(msg, ...) do { \
+#define INFO(msg, ...) do { \
     cdt_info_handler(__FILE__, __LINE__, msg, ##__VA_ARGS__); \
 } while(0)
 
-#define panic(msg, ...) do { \
+#define PANIC(msg, ...) do { \
     cdt_error_handler(__FILE__, __LINE__, NULL, msg, ##__VA_ARGS__); \
     CDT_TRAP(); \
 } while(0)
 
-#define todo() do { \
-    panic("not yet implemented"); \
+#define TODO() do { \
+    PANIC("not yet implemented"); \
 } while(0)
 
 //an interesting error system implementaiton
@@ -214,7 +214,7 @@ typedef struct Code_Location {
     const char *file;
 } Code_Location;
 
-#define _current_location ((Code_Location){ .line = cast(usize) __LINE__, .file = __FILE__ })
+#define _current_location ((Code_Location){ .line = CAST(usize) __LINE__, .file = __FILE__ })
 #define location_fmt "%s:%ld: "
 #define location_arg(_a) _a.file, _a.line
 
@@ -227,10 +227,10 @@ typedef struct Error {
 #define new_error(_err) ((Error){ .loc = _current_location, .code = _err })
 #define is_error(_e) ((_e).code != 0)
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define clamp(x, lower, upper) min(max((x), (lower)), (upper))
-#define in_between(x, l, u) ((x) >= (l) && (x) <= (u))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define CLAMP(x, lower, upper) MIN(MAX((x), (lower)), (upper))
+#define IN_BETWEEN(x, l, u) ((x) >= (l) && (x) <= (u))
 
 //TODO: implement proper allocator
 void *xcalloc (usize num_elems, usize elem_size);
@@ -255,8 +255,8 @@ bool sb_read_file(String_Builder *sb, const char *file_path);
 
 //TODO: add formatter
 #define SV(x) sv_from_parts(x, strlen(x))
-#define sv_arg(x) cast(i32)(x.count), (x.bytes)
-#define sb_arg(x) cast(i32)vec_len(x), (x)
+#define sv_arg(x) CAST(i32)(x.count), (x.bytes)
+#define sb_arg(x) CAST(i32)vec_len(x), (x)
 
 #define sv_fmt "%.*s"
 #define sb_fmt sv_fmt
@@ -329,7 +329,7 @@ void cdt_info_handler (const char *file, i32 line, const char *msg, ...) {
 void *xcalloc(usize num_elems, usize elem_size) {
     void *ptr = calloc(num_elems, elem_size);
     if (!ptr) {
-        panic("xcalloc");
+        PANIC("xcalloc");
     }
     return ptr;
 }
@@ -337,7 +337,7 @@ void *xcalloc(usize num_elems, usize elem_size) {
 void *xrealloc(void *ptr, usize num_bytes) {
     ptr = realloc(ptr, num_bytes);
     if (!ptr) {
-        panic("xrealloc");
+        PANIC("xrealloc");
     }
     return ptr;
 }
@@ -345,14 +345,14 @@ void *xrealloc(void *ptr, usize num_bytes) {
 void *xmalloc(usize num_bytes) {
     void *ptr = malloc(num_bytes);
     if (!ptr) {
-        panic("xmalloc");
+        PANIC("xmalloc");
     }
     return ptr;
 }
 
 void xfree(void *ptr) {
     if (!ptr) {
-        panic("xfree");
+        PANIC("xfree");
     }
     free(ptr);
 }

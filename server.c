@@ -62,9 +62,9 @@ Client *find_client_peer(ENetPeer *peer) {
 
 int main() {
     if (enet_initialize () != 0) {
-        panic("an error occurred while initializing enet");
+        PANIC("an error occurred while initializing enet");
     }
-    info("enet initialized successfully");
+    INFO("enet initialized successfully");
 
     ENetAddress address = {
         .host = ENET_HOST_ANY,
@@ -74,11 +74,11 @@ int main() {
     ENetHost *server = enet_host_create(&address, MAX_CLIENTS, 2, 0, 0);
 
     if (!server) {
-        panic("an error occurred while trying to create an ENet server host");
+        PANIC("an error occurred while trying to create an ENet server host");
     }
-    info("server host created successfully");
+    INFO("server host created successfully");
 
-    info("started a server");
+    INFO("started a server");
 
     ENetEvent event;
     for (;;) {
@@ -93,19 +93,19 @@ int main() {
                     .type = Packet_GIVE_ID,
                     .give_id = c->id,
                 };
-                info("new connection client(%lu)", c->id);
+                INFO("new connection client(%lu)", c->id);
                 ENetPacket* packet = enet_packet_create(&p, sizeof(p), ENET_PACKET_FLAG_RELIABLE);
                 enet_peer_send(event.peer, 0, packet);
 
                 if (clients_count == 2) {
-                    info("enough players for match");
+                    INFO("enough players for match");
                     Client c1 = clients[clients_count - 2];
                     Client c2 = clients[clients_count - 1];
                     Match *match = new_match();
                     match->id    = gen_id();
                     match->c[0]  = c1.id;
                     match->c[1]  = c2.id;
-                    info("match(%lu) created", match->id);
+                    INFO("match(%lu) created", match->id);
                     Packet p = {
                         .type = Packet_NEW_MATCH,
                         .new_match = *match,
@@ -117,16 +117,16 @@ int main() {
             } break;
 
             case ENET_EVENT_TYPE_RECEIVE: {
-                info("a packet of length %lu was received from client(%lu) on channel %u",
+                INFO("a packet of length %lu was received from client(%lu) on channel %u",
                         event.packet->dataLength,
                         find_client_peer(event.peer)->id,
                         event.channelID);
                 Client *sender = find_client_peer(event.peer);
-                Packet p = *cast(Packet *)event.packet->data;
+                Packet p = *CAST(Packet *)event.packet->data;
                 switch (p.type) {
                 case Packet_MOVE: {
                     Match *match = find_match_id(p.move.match_id);
-                    info("move in match(%lu) from client(%lu) > group(%lu) from(%u) to(%u)", match->id, sender->id, p.move.m.group, p.move.m.from, p.move.m.to);
+                    INFO("move in match(%lu) from client(%lu) > group(%lu) from(%u) to(%u)", match->id, sender->id, p.move.m.group, p.move.m.from, p.move.m.to);
                     u32 target_id = match->c[0];
                     if (sender->id == target_id) {
                         target_id = match->c[1];
@@ -145,20 +145,20 @@ int main() {
                 case Packet_SAY_HELLO:
                 case Packet_GIVE_ID:
                 case Packet_Count: {
-                    info("invalid packet");
+                    INFO("invalid packet");
                 } break;
                 }
                 enet_packet_destroy (event.packet);
             } break;
 
             case ENET_EVENT_TYPE_DISCONNECT: {
-                info("client(%lu) disconnected", find_client_peer(event.peer)->id);
+                INFO("client(%lu) disconnected", find_client_peer(event.peer)->id);
                 // TODO: modify client array
                 event.peer->data = NULL;
             } break;
 
             case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT: {
-                info("client(%lu) disconnected due to timeout", find_client_peer(event.peer)->id);
+                INFO("client(%lu) disconnected due to timeout", find_client_peer(event.peer)->id);
                 event.peer->data = NULL;
             } break;
 
