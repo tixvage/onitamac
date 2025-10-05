@@ -771,11 +771,11 @@ int main(void) {
 
     CloseWindow();
 
-    enet_host_service(G.client, &event, 5000);
+    enet_host_service(G.client, &event, 1000);
     enet_peer_disconnect(G.peer, 0);
 
     bool disconnected = false;
-    while (enet_host_service(G.client, &event, 3000) > 0) {
+    while (enet_host_service(G.client, &event, 1000) > 0) {
         switch (event.type) {
         case ENET_EVENT_TYPE_RECEIVE: {
             enet_packet_destroy(event.packet);
